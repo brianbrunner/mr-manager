@@ -1,0 +1,29 @@
+{
+  "name": "mr-manager",
+  "version": "0.0.1",
+  "description": "Process manager for running stuff",
+  "bin": {
+    "mrm": "./index.js",
+    "mr-man": "./index.js",
+    "mr-manager": "./index.js"
+  },
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brianbrunner/mr-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brianbrunner/mr-manager/issues"
+  },
+  "homepage": "https://github.com/brianbrunner/mr-manager",
+  "author": "Brian Brunner (brian.brunner@gmail.com)",
+  "license": "MIT",
+  "dependencies": {
+    "js-yaml": "^3.13.1",
+    "toml": "^3.0.0",
+    "yargs": "^13.2.4"
+  }
+}
