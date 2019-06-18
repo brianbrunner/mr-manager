@@ -32,6 +32,8 @@ const STATES = {
   COMPLETE: CHARS.BG_GREEN,
 }
 
+const CHOKIDAR_IGNORE = 'node_modules';
+
 const COMMAND_STRIP_REGEX = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g
 
 const NAME_FOR_STATE = (stateValue) => Object.keys(STATES).find(key => STATES[key] === stateValue);
@@ -103,11 +105,12 @@ class CommandRunner {
 			opts = this.watch.opts || {};
 		}
     opts.ignoreInitial = true
-    this.watcher = chokidar.watch([paths], opts);
-		this.watcher.on('all', (info) => this._restart(info));
+    opts.ignored = opts.ignored ? new RegExp(`(${opts.ignored}|${CHOKIDAR_IGNORE})`) : new RegExp(CHOKIDAR_IGNORE);
+    this.watcher = chokidar.watch(paths, opts);
+		this.watcher.on('all', (info, a, b) => this._restart(info, a, b));
   }
 
-	_restart(info) {
+	_restart(info, b, c) {
 		this.restarted = true;
     this._out("Watched files have changed, restarting...")
 		kill(this._proc.pid)

@@ -96,3 +96,11 @@ Each command has the following format:
 * `ready` - a list of regexes to match against to determine when your process has built successfully and is ready
 * `failed` - a list of regexes to match against to determine when your process has failed to build
 * `install` - a list of commands to run prior to running the parent command, only occurs on the initial run and does not retrigger on subsequent refreshes, usually handles installing dependencies or any other setup, these have the same format and parameters as a top level command
+
+# Gotchas
+
+By default, the `watch` option will ignore `node_modules` directories since including them can cause heavy CPU usage
+when starting the watcher. There currently isn't a way to disable this outside of altering the code yourself.
+
+`ready`/`building`/`failed` are always interpreted as regexes. Make sure to include escape characters in them if you
+need to.
