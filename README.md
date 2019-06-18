@@ -16,6 +16,14 @@ mrm
 
 ## Command Line Options
 
+You may supply one or more positional arguments to run a subset of the commands defined in your config file e.g.
+
+```
+mrm frontend *-svc backend-*
+```
+
+The following named arguments are supported:
+
 * `-c` - config file location, if not specified looks for `mrm.toml` or `mrm.yaml` in the `cwd`
 
 # Config File Format
@@ -39,6 +47,15 @@ commands:
     ready:
       - "Listening on"
 
+    install:
+
+      - name: 'deps'
+        command: 'yarn'
+        args:
+          - "install"
+        options:
+          cwd: "./backend"
+
   - name: "frontend"
     command: "yarn"
     args:
@@ -52,6 +69,15 @@ commands:
       - "Failed to compile"
     options:
       cwd: "./frontend"
+
+    install:
+
+      - name: 'deps'
+        command: 'yarn'
+        args:
+          - "install"
+        options:
+          cwd: "./frontend"
 ```
 
 There are two top level params:
@@ -69,3 +95,4 @@ Each command has the following format:
 * `building` - a list of regexes to match against to determine when your process is building
 * `ready` - a list of regexes to match against to determine when your process has built successfully and is ready
 * `failed` - a list of regexes to match against to determine when your process has failed to build
+* `install` - a list of commands to run prior to running the parent command, only occurs on the initial run and does not retrigger on subsequent refreshes, usually handles installing dependencies or any other setup, these have the same format and parameters as a top level command

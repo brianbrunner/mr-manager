@@ -9,13 +9,16 @@ const os = require('os');
 const yaml = require('js-yaml');
 const kill = require('tree-kill');
 const chokidar = require('chokidar');
+const minimatch = require('minimatch');
 
 const CHARS = {
   RED: '\u001b[31;1m',
-  DARK_RED: '\u001b[31;1m',
+  BG_RED: '\u001b[30m\u001b[41m',
   MAGENTA: '\u001b[35;1m',
   CYAN: '\u001b[36;1m',
   GREEN: '\u001b[32;1m',
+  BG_GREEN: '\u001b[30m\u001b[42m',
+  YELLOW: '\u001b[33;1m',
   RESET: '\u001b[0m',
 }
 
@@ -24,7 +27,9 @@ const STATES = {
   BUILDING: CHARS.CYAN,
   READY: CHARS.GREEN,
   FAILED: CHARS.RED,
-  CLOSED: CHARS.DARK_RED,
+  CLOSED: CHARS.BG_RED,
+  INSTALLING: CHARS.YELLOW,
+  COMPLETE: CHARS.BG_GREEN,
 }
 
 const COMMAND_STRIP_REGEX = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g
@@ -34,7 +39,7 @@ const NAME_FOR_STATE = (stateValue) => Object.keys(STATES).find(key => STATES[ke
 const STRING_TO_REGEX = (string) => new RegExp(string, 'i');
 
 class CommandRunner {
-  constructor({command, args=[], name, options, watch, building=[], ready=[], failed=[]}) {
+  constructor({command, args=[], name, options, watch, install, building=[], ready=[], failed=[]}, {installer=false}={}) {
     this.command = command;
     this.args = args;
     this.name = name || command;
@@ -42,12 +47,33 @@ class CommandRunner {
     this.building = building.map(STRING_TO_REGEX);
     this.ready = ready.map(STRING_TO_REGEX);
     this.failed = failed.map(STRING_TO_REGEX);
-    this.state = STATES.INITIALIZING;
     this.watch = watch;
+    this.install = install;
+    this._installer = installer;
+    this.state = (installer || this.install && this.install.length > 0) ? STATES.INSTALLING : STATES.INITIALIZING;
   }
 
   start({state, out, err, close}) {
-    if (!this._started) {
+    if (this.install && this.install.length > 0) {
+      // If we have install steps, remove them off the head of the
+      // queue and run them in sub-runners until none are left
+      const currentInstallStep = this.install.shift();
+      currentInstallStep.name = `${this.name}:${currentInstallStep.name || 'install'}`;
+      const installRunner = new CommandRunner(currentInstallStep, {installer: true});
+      installRunner.start({
+        out: out,
+        err: err,
+        state: state,
+        close: ({code, info}) => {
+          if (code != 0) {
+            close(code);
+          } else {
+            this.state = STATES.INITIALIZING;
+            this.start({state, out, err, close});
+          }
+        }
+      });
+    } else if (!this._started) {
       this._started = true;
       this._callbacks = {state, out, err, close}
       this._propagateState();
@@ -131,7 +157,7 @@ class CommandRunner {
 			this.restarted = false;
 			return;
 		}
-    this.state = STATES.CLOSED;
+    this.state = (this._installer && code === 0) ? STATES.COMPLETE : STATES.CLOSED;
     this._propagateState();
     const {name, _callbacks} = this;
     const restart = () => {
@@ -143,8 +169,18 @@ class CommandRunner {
 }
 
 class CommandRunnerManager {
-  constructor({commands}) {
-    this._commands = commands.map(command => new CommandRunner(command));
+  constructor({commands, include}) {
+    this._rawCommands = commands;
+    if (include && include.length > 0) {
+      this._rawCommands = this._rawCommands
+        .filter(command =>
+          include.find(pattern =>
+            minimatch(command.name, pattern) ||
+            command.tags && command.tags.find(tag => minimatch(tag, pattern))
+          )
+        )
+    }
+    this._commands = this._rawCommands.map(command => new CommandRunner(command));
     this._statusLineLength = 0
   }
 
@@ -206,6 +242,7 @@ class CommandRunnerManager {
 }
 
 if (require.main === module) {
+
   const configFile = argv.c || (fs.existsSync('./mrm.yaml') && './mrm.yaml') || './mrm.toml';
   const configString = fs.readFileSync(configFile);
   const ext = path.extname(configFile);
@@ -213,6 +250,11 @@ if (require.main === module) {
 	const {version} = config;
 
 	if (version === 'exp') {
+    const include = argv._.join(',').split(',').filter(arg => !!arg);
+    if (include.length > 0) {
+      config.include = (config.include || []).concat(include);
+    }
+
 		const manager = new CommandRunnerManager(config);
 		manager.start();
 	} else {
