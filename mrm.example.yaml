@@ -1,0 +1,28 @@
+version: "exp"
+
+commands:
+
+  - name: "backend"
+    command: "node"
+    args:
+      - "index.js"
+    watch:
+      - "./backend/*.js"
+    options:
+      cwd: "./backend"
+    ready:
+      - "Listening on"
+
+  - name: "frontend"
+    command: "yarn"
+    args:
+      - "webpack"
+    building:
+      - "Compiling"
+    ready:
+      - "Compiled"
+      - "Built at"
+    failed:
+      - "Failed to compile"
+    options:
+      cwd: "./frontend"

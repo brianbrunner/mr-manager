@@ -7,6 +7,8 @@ const toml = require('toml');
 const path = require('path');
 const os = require('os');
 const yaml = require('js-yaml');
+const kill = require('tree-kill');
+const chokidar = require('chokidar');
 
 const CHARS = {
   RED: '\u001b[31;1m',
@@ -32,7 +34,7 @@ const NAME_FOR_STATE = (stateValue) => Object.keys(STATES).find(key => STATES[ke
 const STRING_TO_REGEX = (string) => new RegExp(string, 'i');
 
 class CommandRunner {
-  constructor({command, args=[], name, options, building=[], ready=[], failed=[]}) {
+  constructor({command, args=[], name, options, watch, building=[], ready=[], failed=[]}) {
     this.command = command;
     this.args = args;
     this.name = name || command;
@@ -41,6 +43,7 @@ class CommandRunner {
     this.ready = ready.map(STRING_TO_REGEX);
     this.failed = failed.map(STRING_TO_REGEX);
     this.state = STATES.INITIALIZING;
+    this.watch = watch;
   }
 
   start({state, out, err, close}) {
@@ -49,18 +52,41 @@ class CommandRunner {
       this._callbacks = {state, out, err, close}
       this._propagateState();
       this._run()
+      if (this.watch) {
+        this._startAutoreload();
+      }
     } else {
       throw new Error(`[${this.name}] has already started`)
     }
   }
 
   _run() {
-    const {command, args} = this;
-    this._proc = spawn(command, args, this.options);
+    const {command, args, options} = this;
+    this._proc = spawn(command, args, options);
     this._proc.stdout.on('data', (data) => this._out(data.toString('utf8')));
     this._proc.stderr.on('data', (data) => this._err(data.toString('utf8')));
     this._proc.on('close', (code) => this._close(code));
   }
+
+  _startAutoreload() {
+		var paths, opts = {};
+    if (typeof this.watch === 'string' || Array.isArray(this.watch)) {
+			paths = this.watch;
+		} else {
+			paths = this.watch.paths || this.watch.path;
+			opts = this.watch.opts || {};
+		}
+    opts.ignoreInitial = true
+    this.watcher = chokidar.watch([paths], opts);
+		this.watcher.on('all', (info) => this._restart(info));
+  }
+
+	_restart(info) {
+		this.restarted = true;
+    this._out("Watched files have changed, restarting...")
+		kill(this._proc.pid)
+		this._run();
+	}
 
   _propagateState() {
     const {name, state, _callbacks} = this;
@@ -101,6 +127,10 @@ class CommandRunner {
   }
 
   _close(code) {
+		if (this.restarted) {
+			this.restarted = false;
+			return;
+		}
     this.state = STATES.CLOSED;
     this._propagateState();
     const {name, _callbacks} = this;
@@ -169,7 +199,7 @@ class CommandRunnerManager {
 
   _close({name, code, restart}) {
     this._clearStatusLines();
-    console.log(`${CHARS.RED}[${name}]${CHARS.RESET} has quit unexpectdly, automatically restarting...`)
+    console.log(`${CHARS.RED}[${name}]${CHARS.RESET} Command has quit unexpectdly, automatically restarting...`)
     restart();
     this._logStatusLines();
   }
@@ -180,7 +210,12 @@ if (require.main === module) {
   const configString = fs.readFileSync(configFile);
   const ext = path.extname(configFile);
   const config = ext.startsWith('.t') ? toml.parse(configString) : yaml.safeLoad(configString);
+	const {version} = config;
 
-  const manager = new CommandRunnerManager(config);
-  manager.start();
+	if (version === 'exp') {
+		const manager = new CommandRunnerManager(config);
+		manager.start();
+	} else {
+		console.error(`Unknown config version \`${version}\``);
+	}
 }

@@ -1,6 +1,6 @@
 {
   "name": "mr-manager",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Process manager for running stuff",
   "bin": {
     "mrm": "./index.js",
@@ -22,8 +22,10 @@
   "author": "Brian Brunner (brian.brunner@gmail.com)",
   "license": "MIT",
   "dependencies": {
+    "chokidar": "^3.0.1",
     "js-yaml": "^3.13.1",
     "toml": "^3.0.0",
+    "tree-kill": "^1.2.1",
     "yargs": "^13.2.4"
   }
 }
